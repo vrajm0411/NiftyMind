@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NiftyMind - 3D Neural Network Code Graph</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0e17;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+  }
+  #graph { width: 100vw; height: 100vh; }
+  #info {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    color: #e0e0e0;
+    z-index: 100;
+    pointer-events: none;
+  }
+  #info h1 {
+    font-size: 18px;
+    color: #00d4ff;
+    margin-bottom: 4px;
+    text-shadow: 0 0 10px rgba(0,212,255,0.5);
+  }
+  #info p { font-size: 11px; color: #888; }
+  #legend {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 100;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #aaa;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 6px currentColor;
+  }
+  #tooltip {
+    position: fixed;
+    display: none;
+    background: rgba(10, 14, 23, 0.95);
+    border: 1px solid rgba(0,212,255,0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #e0e0e0;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 200;
+    backdrop-filter: blur(8px);
+    max-width: 300px;
+  }
+  #tooltip .name { color: #00d4ff; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .type { color: #888; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  #controls {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ctrl-btn {
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.3);
+    color: #00d4ff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ctrl-btn:hover {
+    background: rgba(0,212,255,0.2);
+    box-shadow: 0 0 12px rgba(0,212,255,0.3);
+  }
+  #loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #00d4ff;
+    font-size: 14px;
+    z-index: 300;
+  }
+</style>
+</head>
+<body>
+<div id="loading">Loading 3D Graph...</div>
+<div id="info">
+  <h1>NiftyMind Code Graph</h1>
+  <p>3D Neural Network | Drag to rotate, scroll to zoom, click node to focus</p>
+</div>
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="color:#ff6b6b;background:#ff6b6b"></div>API Routes</div>
+  <div class="legend-item"><div class="legend-dot" style="color:#00d4ff;background:#00d4ff"></div>Pages</div>
+  <div class="legend-item"><div class="legend-dot" style="color:#a855f7;background:#a855f7"></div>Lib Core</div>
+  <div class="legend-item"><div class="legend-dot" style="color:#10b981;background:#10b981"></div>Components</div>
+  <div class="legend-item"><div class="legend-dot" style="color:#f59e0b;background:#f59e0b"></div>Hooks</div>
+  <div class="legend-item"><div class="legend-dot" style="color:#ec4899;background:#ec4899"></div>Upstox</div>
+  <div class="legend-item"><div class="legend-dot" style="color:#06b6d4;background:#06b6d4"></div>AI Module</div>
+</div>
+<div id="tooltip">
+  <div class="type"></div>
+  <div class="name"></div>
+</div>
+<div id="controls">
+  <button class="ctrl-btn" onclick="toggleParticles()">Toggle Particles</button>
+  <button class="ctrl-btn" onclick="resetCamera()">Reset View</button>
+  <button class="ctrl-btn" onclick="toggleSpin()">Auto Spin</button>
+</div>
+<div id="graph"></div>
+
+<script src="https://unpkg.com/3d-force-graph"></script>
+<script>
+document.getElementById("loading").style.display = "none";
+
+if (typeof ForceGraph3D === "undefined") {
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("loading").textContent = "ERROR: Failed to load 3D library. Check internet connection.";
+  throw new Error("ForceGraph3D not loaded");
+}
+
+// ─── Data ───
+const nodes = [
+  { id: "api/auth/login", group: "api", label: "login" },
+  { id: "api/auth/register", group: "api", label: "register" },
+  { id: "api/auth/logout", group: "api", label: "logout" },
+  { id: "api/auth/session", group: "api", label: "session-api" },
+  { id: "api/auth/token", group: "api", label: "token" },
+  { id: "api/auth/upstox-login", group: "api", label: "upstox-login" },
+  { id: "api/auth/upstox-callback", group: "api", label: "upstox-cb" },
+  { id: "api/market/indices", group: "api", label: "indices" },
+  { id: "api/market/quote", group: "api", label: "quote" },
+  { id: "api/market/search", group: "api", label: "search" },
+  { id: "api/market/candles", group: "api", label: "candles" },
+  { id: "api/market/crisis-prices", group: "api", label: "crisis-prices" },
+  { id: "api/market/movers", group: "api", label: "movers" },
+  { id: "api/market/performance", group: "api", label: "performance" },
+  { id: "api/portfolio/holdings", group: "api", label: "holdings" },
+  { id: "api/portfolio/positions", group: "api", label: "positions" },
+  { id: "api/analysis/stream", group: "api", label: "ai-stream" },
+  { id: "dashboard/page", group: "page", label: "Dashboard" },
+  { id: "dashboard/ai-analysis", group: "page", label: "AI Analysis" },
+  { id: "dashboard/portfolio", group: "page", label: "Portfolio" },
+  { id: "dashboard/market", group: "page", label: "Market" },
+  { id: "dashboard/watchlist", group: "page", label: "Watchlist" },
+  { id: "dashboard/settings", group: "page", label: "Settings" },
+  { id: "dashboard/layout", group: "page", label: "Layout" },
+  { id: "lib/auth/session", group: "lib", label: "session" },
+  { id: "lib/auth/jwt", group: "lib", label: "jwt" },
+  { id: "lib/auth/password", group: "lib", label: "password" },
+  { id: "lib/auth/turnstile", group: "lib", label: "turnstile" },
+  { id: "lib/utils", group: "lib", label: "utils" },
+  { id: "lib/env", group: "lib", label: "env" },
+  { id: "lib/cache/redis", group: "lib", label: "cache" },
+  { id: "lib/db/prisma", group: "lib", label: "prisma" },
+  { id: "lib/upstox/client", group: "upstox", label: "upstox-client" },
+  { id: "lib/upstox/market-data", group: "upstox", label: "market-data" },
+  { id: "lib/upstox/instruments", group: "upstox", label: "instruments" },
+  { id: "lib/upstox/instrument-master", group: "upstox", label: "inst-master" },
+  { id: "lib/upstox/crisis-prices", group: "upstox", label: "crisis-prices" },
+  { id: "lib/upstox/fundamentals", group: "upstox", label: "fundamentals" },
+  { id: "lib/upstox/portfolio", group: "upstox", label: "portfolio" },
+  { id: "lib/upstox/auth", group: "upstox", label: "upstox-auth" },
+  { id: "lib/ai/analyzer", group: "ai", label: "analyzer" },
+  { id: "lib/ai/prompts", group: "ai", label: "prompts" },
+  { id: "lib/ai/streaming", group: "ai", label: "streaming" },
+  { id: "lib/ai/crisis-data", group: "ai", label: "crisis-data" },
+  { id: "lib/ai/parser", group: "ai", label: "parser" },
+  { id: "lib/ai/types", group: "ai", label: "ai-types" },
+  { id: "lib/screener/client", group: "lib", label: "screener" },
+  { id: "lib/screener/types", group: "lib", label: "screener-types" },
+  { id: "comp/glass-card", group: "component", label: "GlassCard" },
+  { id: "comp/stock-search", group: "component", label: "StockSearch" },
+  { id: "comp/streaming-report", group: "component", label: "StreamingReport" },
+  { id: "comp/crisis-table", group: "component", label: "CrisisTable" },
+  { id: "comp/price-performance", group: "component", label: "PricePerf" },
+  { id: "comp/health-score-ring", group: "component", label: "HealthScore" },
+  { id: "comp/risk-meter", group: "component", label: "RiskMeter" },
+  { id: "comp/verdict-badge", group: "component", label: "VerdictBadge" },
+  { id: "comp/price-target-card", group: "component", label: "PriceTarget" },
+  { id: "comp/bull-bear-card", group: "component", label: "BullBear" },
+  { id: "comp/sidebar", group: "component", label: "Sidebar" },
+  { id: "comp/mini-sparkline", group: "component", label: "Sparkline" },
+  { id: "comp/metric-card", group: "component", label: "MetricCard" },
+  { id: "comp/loading-skeleton", group: "component", label: "Skeleton" },
+  { id: "hooks/use-analysis", group: "hook", label: "useAnalysis" },
+  { id: "hooks/use-stock", group: "hook", label: "useStock" },
+  { id: "hooks/use-auth", group: "hook", label: "useAuth" },
+];
+
+const links = [
+  { source: "api/auth/login", target: "lib/db/prisma" },
+  { source: "api/auth/login", target: "lib/auth/password" },
+  { source: "api/auth/login", target: "lib/auth/jwt" },
+  { source: "api/auth/login", target: "lib/auth/turnstile" },
+  { source: "api/auth/register", target: "lib/db/prisma" },
+  { source: "api/auth/register", target: "lib/auth/password" },
+  { source: "api/auth/register", target: "lib/auth/jwt" },
+  { source: "api/auth/register", target: "lib/auth/turnstile" },
+  { source: "api/auth/session", target: "lib/auth/session" },
+  { source: "api/auth/token", target: "lib/db/prisma" },
+  { source: "api/auth/token", target: "lib/auth/session" },
+  { source: "api/auth/upstox-login", target: "lib/auth/session" },
+  { source: "api/auth/upstox-login", target: "lib/upstox/auth" },
+  { source: "api/auth/upstox-callback", target: "lib/upstox/auth" },
+  { source: "api/auth/upstox-callback", target: "lib/auth/jwt" },
+  { source: "api/auth/upstox-callback", target: "lib/db/prisma" },
+  { source: "api/market/indices", target: "lib/auth/session" },
+  { source: "api/market/indices", target: "lib/upstox/client" },
+  { source: "api/market/indices", target: "lib/upstox/market-data" },
+  { source: "api/market/quote", target: "lib/auth/session" },
+  { source: "api/market/quote", target: "lib/upstox/client" },
+  { source: "api/market/quote", target: "lib/upstox/market-data" },
+  { source: "api/market/quote", target: "lib/upstox/instruments" },
+  { source: "api/market/search", target: "lib/upstox/instruments" },
+  { source: "api/market/search", target: "lib/upstox/instrument-master" },
+  { source: "api/market/candles", target: "lib/auth/session" },
+  { source: "api/market/candles", target: "lib/upstox/client" },
+  { source: "api/market/candles", target: "lib/upstox/market-data" },
+  { source: "api/market/crisis-prices", target: "lib/auth/session" },
+  { source: "api/market/crisis-prices", target: "lib/upstox/client" },
+  { source: "api/market/crisis-prices", target: "lib/upstox/crisis-prices" },
+  { source: "api/market/movers", target: "lib/auth/session" },
+  { source: "api/market/movers", target: "lib/upstox/client" },
+  { source: "api/market/movers", target: "lib/upstox/market-data" },
+  { source: "api/market/performance", target: "lib/auth/session" },
+  { source: "api/market/performance", target: "lib/upstox/client" },
+  { source: "api/market/performance", target: "lib/upstox/market-data" },
+  { source: "api/market/performance", target: "lib/cache/redis" },
+  { source: "api/portfolio/holdings", target: "lib/auth/session" },
+  { source: "api/portfolio/holdings", target: "lib/upstox/client" },
+  { source: "api/portfolio/holdings", target: "lib/upstox/portfolio" },
+  { source: "api/portfolio/positions", target: "lib/auth/session" },
+  { source: "api/portfolio/positions", target: "lib/upstox/client" },
+  { source: "api/portfolio/positions", target: "lib/upstox/portfolio" },
+  { source: "api/analysis/stream", target: "lib/auth/session" },
+  { source: "api/analysis/stream", target: "lib/ai/analyzer" },
+  { source: "lib/auth/session", target: "lib/auth/jwt" },
+  { source: "lib/auth/session", target: "lib/db/prisma" },
+  { source: "lib/auth/turnstile", target: "lib/env" },
+  { source: "lib/upstox/client", target: "lib/env" },
+  { source: "lib/upstox/auth", target: "lib/env" },
+  { source: "lib/upstox/market-data", target: "lib/upstox/client" },
+  { source: "lib/upstox/market-data", target: "lib/cache/redis" },
+  { source: "lib/upstox/crisis-prices", target: "lib/upstox/client" },
+  { source: "lib/upstox/crisis-prices", target: "lib/cache/redis" },
+  { source: "lib/upstox/crisis-prices", target: "lib/ai/crisis-data" },
+  { source: "lib/upstox/fundamentals", target: "lib/upstox/client" },
+  { source: "lib/upstox/fundamentals", target: "lib/cache/redis" },
+  { source: "lib/upstox/fundamentals", target: "lib/screener/types" },
+  { source: "lib/upstox/portfolio", target: "lib/upstox/client" },
+  { source: "lib/upstox/portfolio", target: "lib/cache/redis" },
+  { source: "lib/screener/client", target: "lib/cache/redis" },
+  { source: "lib/screener/client", target: "lib/env" },
+  { source: "lib/ai/analyzer", target: "lib/upstox/client" },
+  { source: "lib/ai/analyzer", target: "lib/upstox/instruments" },
+  { source: "lib/ai/analyzer", target: "lib/upstox/market-data" },
+  { source: "lib/ai/analyzer", target: "lib/upstox/fundamentals" },
+  { source: "lib/ai/analyzer", target: "lib/screener/client" },
+  { source: "lib/ai/analyzer", target: "lib/ai/prompts" },
+  { source: "lib/ai/analyzer", target: "lib/ai/streaming" },
+  { source: "lib/ai/analyzer", target: "lib/ai/crisis-data" },
+  { source: "lib/ai/prompts", target: "lib/screener/types" },
+  { source: "dashboard/page", target: "comp/glass-card" },
+  { source: "dashboard/page", target: "comp/mini-sparkline" },
+  { source: "dashboard/page", target: "lib/utils" },
+  { source: "dashboard/ai-analysis", target: "comp/stock-search" },
+  { source: "dashboard/ai-analysis", target: "comp/streaming-report" },
+  { source: "dashboard/ai-analysis", target: "comp/verdict-badge" },
+  { source: "dashboard/ai-analysis", target: "comp/price-target-card" },
+  { source: "dashboard/ai-analysis", target: "comp/risk-meter" },
+  { source: "dashboard/ai-analysis", target: "comp/health-score-ring" },
+  { source: "dashboard/ai-analysis", target: "comp/bull-bear-card" },
+  { source: "dashboard/ai-analysis", target: "comp/crisis-table" },
+  { source: "dashboard/ai-analysis", target: "comp/price-performance" },
+  { source: "dashboard/ai-analysis", target: "comp/glass-card" },
+  { source: "dashboard/ai-analysis", target: "comp/loading-skeleton" },
+  { source: "dashboard/ai-analysis", target: "hooks/use-analysis" },
+  { source: "dashboard/ai-analysis", target: "hooks/use-stock" },
+  { source: "dashboard/ai-analysis", target: "lib/upstox/instruments" },
+  { source: "dashboard/ai-analysis", target: "lib/ai/crisis-data" },
+  { source: "dashboard/portfolio", target: "comp/glass-card" },
+  { source: "dashboard/portfolio", target: "comp/metric-card" },
+  { source: "dashboard/portfolio", target: "comp/loading-skeleton" },
+  { source: "dashboard/market", target: "comp/glass-card" },
+  { source: "dashboard/market", target: "comp/mini-sparkline" },
+  { source: "dashboard/watchlist", target: "comp/glass-card" },
+  { source: "dashboard/watchlist", target: "comp/stock-search" },
+  { source: "dashboard/watchlist", target: "hooks/use-stock" },
+  { source: "dashboard/settings", target: "comp/glass-card" },
+  { source: "dashboard/settings", target: "hooks/use-auth" },
+  { source: "dashboard/layout", target: "comp/sidebar" },
+  { source: "dashboard/layout", target: "lib/auth/session" },
+  { source: "comp/stock-search", target: "lib/utils" },
+  { source: "comp/stock-search", target: "lib/upstox/instruments" },
+  { source: "comp/stock-search", target: "hooks/use-stock" },
+  { source: "comp/crisis-table", target: "lib/utils" },
+  { source: "comp/glass-card", target: "lib/utils" },
+  { source: "comp/price-performance", target: "lib/utils" },
+  { source: "comp/price-target-card", target: "lib/utils" },
+  { source: "comp/risk-meter", target: "lib/utils" },
+  { source: "comp/sidebar", target: "lib/utils" },
+  { source: "comp/verdict-badge", target: "lib/utils" },
+  { source: "comp/metric-card", target: "lib/utils" },
+  { source: "comp/loading-skeleton", target: "lib/utils" },
+  { source: "comp/bull-bear-card", target: "comp/glass-card" },
+  { source: "comp/metric-card", target: "comp/glass-card" },
+  { source: "comp/price-target-card", target: "comp/glass-card" },
+  { source: "hooks/use-analysis", target: "lib/ai/parser" },
+  { source: "hooks/use-analysis", target: "lib/ai/types" },
+];
+
+// ─── Colors ───
+const COLORS = {
+  api: "#ff6b6b",
+  page: "#00d4ff",
+  lib: "#a855f7",
+  component: "#10b981",
+  hook: "#f59e0b",
+  upstox: "#ec4899",
+  ai: "#06b6d4",
+};
+
+// Count incoming edges for sizing
+const inDegree = {};
+links.forEach(l => {
+  inDegree[l.target] = (inDegree[l.target] || 0) + 1;
+});
+
+// ─── Build Graph ───
+let particlesEnabled = true;
+let spinning = true;
+
+const Graph = ForceGraph3D()(document.getElementById("graph"))
+  .backgroundColor("#0a0e17")
+  .nodeVal(node => Math.max(3, (inDegree[node.id] || 0) * 1.5 + 2))
+  .nodeColor(node => COLORS[node.group] || "#666")
+  .nodeOpacity(0.95)
+  .nodeResolution(12)
+  .nodeLabel(node => `<div style="color:${COLORS[node.group]};font-weight:bold;font-size:13px">${node.label}</div><div style="color:#888;font-size:10px">${node.group} | ${node.id}</div>`)
+  .linkColor(() => "rgba(100,150,255,0.15)")
+  .linkWidth(0.5)
+  .linkOpacity(0.5)
+  .linkDirectionalParticles(2)
+  .linkDirectionalParticleWidth(1.5)
+  .linkDirectionalParticleSpeed(0.005)
+  .linkDirectionalParticleColor(() => "#00d4ff")
+  .linkCurvature(0.15)
+  .onNodeClick(node => {
+    const distance = 80;
+    const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+    Graph.cameraPosition(
+      { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+      node,
+      1200
+    );
+  })
+  .onNodeHover(node => {
+    document.body.style.cursor = node ? "pointer" : "default";
+  })
+  .graphData({ nodes, links });
+
+// Forces
+Graph.d3Force("charge").strength(-80);
+Graph.d3Force("link").distance(link => {
+  const sNode = nodes.find(n => n.id === link.source.id || n.id === link.source);
+  const tNode = nodes.find(n => n.id === link.target.id || n.id === link.target);
+  if (sNode && tNode && sNode.group === tNode.group) return 25;
+  return 55;
+});
+
+// Auto-rotate
+let angle = 0;
+function animate() {
+  if (spinning) {
+    angle += 0.002;
+    const dist = 320;
+    Graph.cameraPosition({
+      x: dist * Math.sin(angle),
+      z: dist * Math.cos(angle),
+      y: 80
+    });
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+// Stop spin on user interaction
+const graphEl = document.getElementById("graph");
+graphEl.addEventListener("mousedown", () => { spinning = false; });
+graphEl.addEventListener("touchstart", () => { spinning = false; });
+
+// ─── Controls ───
+function toggleParticles() {
+  particlesEnabled = !particlesEnabled;
+  Graph.linkDirectionalParticles(particlesEnabled ? 2 : 0);
+}
+
+function resetCamera() {
+  spinning = true;
+  angle = 0;
+}
+
+function toggleSpin() {
+  spinning = !spinning;
+}
+</script>
+</body>
+</html>
