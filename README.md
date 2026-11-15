@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NiftyMind
+
+AI-powered stock analysis and prediction platform for the Indian equity market (NSE/BSE), built with Next.js 14.
+
+NiftyMind combines live market data from **Upstox**, company fundamentals from **Screener.in**, and LLM reasoning (**Llama 3.3 70B via Groq**) to produce streaming research reports, price forecasts, and portfolio insights.
+
+## Features
+
+- **AI Analysis** — streaming research reports with bull/bear cases, health score, risk meter, and a clear verdict
+- **AI Prediction** — multi-horizon direction and price-target forecasts with confidence and supporting signals
+- **Market Dashboard** — indices, top movers, quotes, candlestick and volume charts with technical indicators
+- **Portfolio** — live holdings and positions synced from your Upstox account
+- **Watchlist** — track stocks with sparkline trends
+- **Crisis Performance** — how a stock behaved during major historical market crashes
+- **Secure Auth** — JWT sessions, bcrypt passwords, Upstox OAuth, optional Cloudflare Turnstile
+
+## Tech Stack
+
+| Layer | Tools |
+|-------|-------|
+| Framework | Next.js 14 (App Router), React 18, TypeScript |
+| UI | Tailwind CSS, Framer Motion, Recharts, Lucide |
+| State | Zustand |
+| Data | PostgreSQL + Prisma |
+| Auth | jose (JWT), bcryptjs |
+| Integrations | Upstox API, Groq, Screener.in / Apify |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 18+
+- PostgreSQL
+- Upstox developer app and Groq API key
+
+### Setup
 
 ```bash
+git clone https://github.com/vrajm0411/NiftyMind.git
+cd NiftyMind
+npm install
+cp .env.example .env.local   # fill in your keys
+cp .env.example .env         # Prisma CLI reads DATABASE_URL from .env
+npx prisma migrate dev
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+app/            Routes, dashboard pages and API handlers
+  api/          auth, market, portfolio, analysis & prediction streams
+components/     Charts and UI components
+hooks/          Client hooks (auth, stock, analysis, prediction)
+lib/
+  ai/           Prompts, analyzers, technical indicators, streaming
+  upstox/       Upstox client, market data, portfolio, instruments
+  screener/     Fundamentals scraping and parsing
+  auth/         JWT, sessions, passwords, Turnstile
+prisma/         Database schema
+deploy/         Server deployment guide and setup script
+```
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
+See [`deploy/DEPLOY.md`](deploy/DEPLOY.md) for a step-by-step guide to deploying on an Oracle Cloud (OCI) instance.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Disclaimer
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+NiftyMind is for educational and research purposes only. AI-generated analysis is not financial advice. Do your own research before investing.
